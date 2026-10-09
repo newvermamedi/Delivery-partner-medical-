@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delivery & Admin Portal - New Verma Medicals</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #0284c7;
+            --primary-dark: #0369a1;
+            --accent: #10b981;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08);
+            --radius: 16px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Poppins', sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); min-height: 100vh; display: flex; flex-direction: column; }
+
+        header {
+            background: linear-gradient(135deg, #0f172a, #1e293b);
+            color: white; padding: 1.5rem 1rem; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            border-bottom: 3px solid var(--primary);
+        }
+        header h1 { font-size: 1.8rem; color: #38bdf8; margin-bottom: 0.2rem; }
+        header p { font-size: 0.85rem; color: #94a3b8; }
+
+        .container { max-width: 1000px; margin: 0 auto; padding: 25px 20px; width: 100%; flex: 1; }
+
+        .section-box { background: white; padding: 20px; border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 25px; border: 1px solid #e2e8f0; }
+        .section-box h2 { font-size: 1.2rem; color: var(--primary); margin-bottom: 15px; display: flex; align-items: center; gap: 8px; }
+
+        .order-item-box { background: #f8fafc; border: 1px solid #cbd5e1; padding: 15px; border-radius: 10px; margin-bottom: 12px; font-size: 0.85rem; }
+        .order-actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+        .btn-primary { background: var(--primary); color: white; border: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 500; transition: 0.3s; }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-success { background: #10b981; color: white; border: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.8rem; }
+        .btn-success:hover { background: #059669; }
+        .btn-danger { background: #ef4444; color: white; border: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.8rem; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-warning { background: #f59e0b; color: white; border: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 0.8rem; }
+        .btn-warning:hover { background: #d97706; }
+
+        #notification-toast {
+            position: fixed; bottom: 25px; right: 25px; background: #0f172a; color: white; padding: 12px 20px;
+            border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); z-index: 2000; display: none; font-size: 0.85rem;
+            border-left: 4px solid var(--accent);
+        }
+
+        footer { background: #1e293b; color: #94a3b8; text-align: center; padding: 20px; font-size: 0.85rem; margin-top: auto; }
+        footer span { color: #38bdf8; }
+    </style>
+</head>
+<body>
+
+    <div id="notification-toast">Update ho gaya!</div>
+
+    <header>
+        <h1>NEW VERMA MEDICALS</h1>
+        <p><i class="fa-solid fa-motorcycle"></i> Delivery Partner & Admin Portal</p>
+    </header>
+
+    <div class="container">
+        
+        <!-- Delivery Partner Section -->
+        <div class="section-box">
+            <h2><i class="fa-solid fa-box-open"></i> Active Delivery Orders (डेलिवरी ऑर्डर्स)</h2>
+            <div id="delivery-orders-list"></div>
+        </div>
+
+        <!-- Admin Prescription Verification Section -->
+        <div class="section-box">
+            <h2><i class="fa-solid fa-file-prescription"></i> Prescription Verification (प्रिस्क्रिप्शन जांच)</h2>
+            <div id="admin-rx-list"></div>
+        </div>
+
+        <!-- Admin Return Requests Section -->
+        <div class="section-box">
+            <h2><i class="fa-solid fa-rotate-left"></i> Return & Exchange Requests (रिटर्न अनुरोध)</h2>
+            <div id="admin-return-list"></div>
+        </div>
+
+    </div>
+
+    <footer>
+        <p>&copy; 2026 <span>New Verma Medicals</span>. Delivery & Admin Dashboard.</p>
+    </footer>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, onValue, update, push } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        const firebaseConfig = {
+            databaseURL: "https://new-verma-medicals-default-rtdb.firebaseio.com/"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        let allOrders = [];
+        let allPrescriptions = [];
+        let allReturns = [];
+
+        function showToast(text) {
+            const toast = document.getElementById("notification-toast");
+            toast.innerText = text;
+            toast.style.display = "block";
+            setTimeout(() => { toast.style.display = "none"; }, 3000);
+        }
+
+        // Fetch Orders
+        onValue(ref(db, 'orders'), (snapshot) => {
+            const data = snapshot.val();
+            allOrders = [];
+            if (data) {
+                Object.keys(data).reverse().forEach(key => allOrders.push({ id: key, ...data[key] }));
+            }
+            renderDeliveryOrders();
+        });
+
+        // Fetch Prescriptions
+        onValue(ref(db, 'prescriptions'), (snapshot) => {
+            const data = snapshot.val();
+            allPrescriptions = [];
+            if (data) {
+                Object.keys(data).reverse().forEach(key => allPrescriptions.push({ id: key, ...data[key] }));
+            }
+            renderAdminRx();
+        });
+
+        // Fetch Returns
+        onValue(ref(db, 'returns'), (snapshot) => {
+            const data = snapshot.val();
+            allReturns = [];
+            if (data) {
+                Object.keys(data).reverse().forEach(key => allReturns.push({ id: key, ...data[key] }));
+            }
+            renderAdminReturns();
+        });
+
+        function renderDeliveryOrders() {
+            const container = document.getElementById("delivery-orders-list");
+            container.innerHTML = "";
+            let activeOrders = allOrders.filter(ord => !ord.status.includes("Delivered") && !ord.status.includes("Cancelled") && !ord.status.includes("Pending"));
+
+            if (activeOrders.length === 0) {
+                container.innerHTML = `<p style="color: var(--text-muted); font-size: 0.85rem;">Delivery ke liye koi active order nahi hai.</p>`;
+                return;
+            }
+
+            activeOrders.forEach(ord => {
+                const div = document.createElement("div");
+                div.className = "order-item-box";
+                div.style.background = "#f0fdf4";
+                div.innerHTML = `
+                    <b>Customer:</b> ${ord.customerName} (<a href="tel:${ord.customerPhone}" style="color:var(--primary)">${ord.customerPhone}</a>)<br>
+                    <b>Address:</b> ${ord.address}<br>
+                    <b>Item & Qty:</b> ${ord.productName} (Qty: ${ord.quantity || 1})<br>
+                    <b>Vasoolne Wala Amount:</b> <b style="color:var(--accent)">₹${ord.productPrice}</b> (${ord.paymentType})<br>
+                    ${ord.paymentScreenshot ? `<a href="${ord.paymentScreenshot}" target="_blank" style="color:var(--primary); text-decoration:underline;">View Online Payment Screenshot</a><br>` : ''}
+                    <b>Delivery Time:</b> <span style="color:#0284c7; font-weight:bold;">${ord.deliveryDateTime || 'Tay nahi hua'}</span>
+                    <div class="order-actions">
+                        <button class="btn-warning" onclick="updateDeliveryTime('${ord.id}')"><i class="fa-solid fa-clock"></i> Timing Update Karein</button>
+                        <button class="btn-success" onclick="markDelivered('${ord.id}')"><i class="fa-solid fa-check-double"></i> Delivered Mark Karein</button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        window.updateDeliveryTime = function(orderId) {
+            let newTime = prompt("Naya delivery samay ya tithi darj karein:", "30 minat mein");
+            if (newTime !== null && newTime.trim() !== "") {
+                update(ref(db, 'orders/' + orderId), { deliveryDateTime: newTime }).then(() => {
+                    showToast("Delivery timing update ho gayi!");
+                });
+            }
+        }
+
+        window.markDelivered = function(orderId) {
+            update(ref(db, 'orders/' + orderId), { status: "Delivered & Confirmed (Partner)" }).then(() => {
+                showToast("Order delivered mark kar diya gaya!");
+            });
+        }
+
+        function renderAdminRx() {
+            const container = document.getElementById("admin-rx-list");
+            container.innerHTML = "";
+            let pendingRx = allPrescriptions.filter(r => r.status === "Pending Verification");
+
+            if (pendingRx.length === 0) {
+                container.innerHTML = `<p style="color: var(--text-muted); font-size: 0.85rem;">Koi naya prescription anurodh nahi hai.</p>`;
+                return;
+            }
+
+            pendingRx.forEach(rx => {
+                const div = document.createElement("div");
+                div.className = "order-item-box";
+                div.innerHTML = `
+                    <b>Time:</b> ${rx.timestamp}<br>
+                    <b>Customer:</b> ${rx.customerName} (${rx.customerPhone})<br>
+                    <b>Prescription Image:</b> <a href="${rx.imgUrl}" target="_blank" style="color:var(--primary); text-decoration:underline;">View Photo</a><br>
+                    <div class="order-actions">
+                        <button class="btn-success" onclick="updateRx('${rx.id}', 'Accepted (Available)')"><i class="fa-solid fa-check"></i> Accept (Available)</button>
+                        <button class="btn-danger" onclick="updateRx('${rx.id}', 'Denied (Not Available)')"><i class="fa-solid fa-xmark"></i> Deny (Not Available)</button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        window.updateRx = function(rxId, statusText) {
+            update(ref(db, 'prescriptions/' + rxId), { status: statusText }).then(() => {
+                showToast("Prescription status update ho gaya!");
+            });
+        }
+
+        function renderAdminReturns() {
+            const container = document.getElementById("admin-return-list");
+            container.innerHTML = "";
+            let pendingReturns = allReturns.filter(r => r.status === "Pending Return Approval");
+
+            if (pendingReturns.length === 0) {
+                container.innerHTML = `<p style="color: var(--text-muted); font-size: 0.85rem;">Koi naya return anurodh nahi hai.</p>`;
+                return;
+            }
+
+            pendingReturns.forEach(ret => {
+                const div = document.createElement("div");
+                div.className = "order-item-box";
+                div.innerHTML = `
+                    <b>Time:</b> ${ret.timestamp}<br>
+                    <b>Customer:</b> ${ret.customerName} (${ret.customerPhone})<br>
+                    <b>Dawai:</b> ${ret.productName} - <b>₹${ret.productPrice}</b><br>
+                    <b>Anurodh Type:</b> <b style="color: var(--primary);">${ret.returnType}</b><br>
+                    <div class="order-actions">
+                        <button class="btn-success" onclick="approveReturn('${ret.id}', '${ret.customerPhone}', ${ret.productPrice}, '${ret.returnType}')"><i class="fa-solid fa-check"></i> Accept Return & Generate Coupon</button>
+                        <button class="btn-danger" onclick="rejectReturn('${ret.id}')"><i class="fa-solid fa-xmark"></i> Reject</button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        window.approveReturn = function(retId, phone, price, type) {
+            let finalReturnAmount = parseFloat(price);
+            let couponMsg = "";
+            if (type === "Medicine for Cash") {
+                let deduction = finalReturnAmount * 0.03;
+                finalReturnAmount = finalReturnAmount - deduction;
+                couponMsg = `Cash Return (3% ded.): ₹${finalReturnAmount.toFixed(2)}`;
+            } else {
+                couponMsg = `Medicine Exchange Credit: ₹${finalReturnAmount}`;
+            }
+
+            let couponCode = "VERMA-" + Math.floor(100000 + Math.random() * 900000);
+
+            push(ref(db, 'credits'), {
+                customerPhone: phone,
+                amount: finalReturnAmount,
+                couponCode: couponCode,
+                type: type,
+                isUsed: false
+            }).then(() => {
+                update(ref(db, 'returns/' + retId), { status: `Approved (${couponMsg})` }).then(() => {
+                    showToast(`Return swikaar ho gaya! Coupon: ${couponCode}`);
+                });
+            });
+        }
+
+        window.rejectReturn = function(retId) {
+            update(ref(db, 'returns/' + retId), { status: "Rejected by Admin" }).then(() => {
+                showToast("Return anurodh aswiikaar kar diya gaya.");
+            });
+        }
+    </script>
+</body>
+</html>
